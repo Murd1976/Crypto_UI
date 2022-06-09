@@ -4,6 +4,7 @@ import numpy as np
 import json
 import time
 import PySimpleGUI as sg
+import paramiko
 #import talib
 
 
@@ -17,7 +18,7 @@ class rep_from_test_res():
     #f_name= 'bc_loss_trail_roi_4_4_p4-2022-04-15_15-52-33'
     #cur_strategy = 'MyLossTrailingMinROI_4_4'
 
-    N_strategy = 4
+    N_strategy = 0
 
     N_candle_analyze = np.array([1,3,5,10,15,30]) #number of Candles to analyze after the buy trigger
     #N_candle_analyze = np.array([3]) #number of Candles to analyze after the buy trigger
@@ -31,8 +32,8 @@ class rep_from_test_res():
     #Average Price Change from the Buying Price
     def sma_rep(self, dataframe_1: pd.DataFrame, buy_price:float):
         dataframe_1=(dataframe_1-buy_price)/buy_price*100
-        sma = round(dataframe_1.sum(),5)/len(dataframe_1)
-   
+        #sma = round(dataframe_1.sum(),5)/len(dataframe_1)
+        sma = dataframe_1.mean()       
         return round(sma, 5)
 
     #On Average, how many candles have closing price > opening price (green candle)
@@ -138,19 +139,53 @@ class rep_from_test_res():
         return round(max_p, 3), round(min_p, 3)
 
     #чтение свечей из заданного файла, с заданным time_rate
-    def get_pair_fdata(self, f_name, time_rate):
+    def get_pair_fdata(self, f_name, time_rate, hostname:str = "172.18.90.46", port:int = 2222, username:str = "murd", password:str = "Ambaloid!"):
 
         col_names=["date", "open", "high", "low", "close", "volume"]
         f_name=f_name+'-'+time_rate+'.json'
 
-        if not os_lib.path.exists(f_name): #проверяем наличие такого файла
-            print('File ot found: ', f_name)
+        f = open('ssh_my_config.conf')
+        host_name = 'none'
+        port_ = "22"
+        for line in f:
+            line = line.strip()
+            if ('hostname' in line):
+                    pars_str = line.split('=')
+                    host_name = pars_str[1].strip()
+                    hostname = host_name
+                    #self.listInfo.addItem("Host name: " + host_name)
+                    
+
+            if ('port' in line):
+                    pars_str = line.split('=')
+                    port_ = pars_str[1]
+                    port = int(port_)
+                    #self.listInfo.addItem("Port: " + port)
+                                        
+                    #self.listInfo.addItem('________________________________________')
+
+
+
+
+        directory ='/home/murd/buf/ft_userdata/user_data/data/binance/'
+        transport = paramiko.Transport((hostname, port))
+        transport.connect(username = username, password = password)
+
+        sftp = paramiko.SFTPClient.from_transport(transport)
+        #загрузить файл свечей на комп пользователя
+        sftp.get(directory + f_name, "./reports/" + f_name)
+        sftp.close()
+
+        if not os_lib.path.exists("./reports/" +f_name): #проверяем наличие такого файла
+            print('File ot found: ', "./reports/" +f_name)
             return null
     
-        f_out_df= pd.read_json(f_name) #читаем данные из файла с time_rate свечами, для конкретной пары
+        f_out_df= pd.read_json("./reports/" +f_name) #читаем данные из файла с time_rate свечами, для конкретной пары
         f_out_df.index.name = 'index'
         f_out_df.columns = col_names
         f_out_df['date'] = pd.to_datetime(f_out_df['date'], unit='ms') #приводим дату в читаемый вид
+
+        os_lib.remove("./reports/" +f_name)
 
 #    print(f_out_df[:10])
 
@@ -167,19 +202,24 @@ class rep_from_test_res():
     #df_pair['date'] = pd.to_datetime(df_pair['date'], unit='ms') #приводим дату в читаемый вид
     def get_report(self, work_path:str = '', f_name:str=''):
 
+        #берем длину последовательности из имени файла теста
+        N_strategy = int(f_name.split('_')[1])
+        
 	#загрузка данных о сделках из файла с результатами BackTest
-        with open(work_path+'/backtest_results/'+f_name, 'r') as f:
+        with open(work_path+f_name, 'r') as f:
             json_obj = json.loads(f.read())
 
         cur_strategy = list(dict.keys(json_obj['strategy']))[0] # вытаскиваем имя стратегии из файла результатоы бектеста
         
         df = pd.DataFrame(json_obj['strategy'][cur_strategy]['trades'])
+        if df.empty:
+            return "no_trades"
         df.index.name = 'Index'
 
         df = df[['pair', 'amount', 'open_date', 'close_date', 'open_rate', 'close_rate', 'trade_duration',
-			 'profit_ratio', 'profit_abs', 'sell_reason', 'stake_amount', 'fee_open', 'fee_close',
+			 'profit_ratio', 'profit_abs', 'exit_reason', 'stake_amount', 'fee_open', 'fee_close',
 			 'initial_stop_loss_abs', 'initial_stop_loss_ratio', 'stop_loss_abs', 'stop_loss_ratio',
-		  	 'min_rate', 'max_rate', 'is_open', 'buy_tag', 'open_timestamp', 'close_timestamp']]
+		  	 'min_rate', 'max_rate', 'is_open', 'enter_tag', "is_short", 'open_timestamp', 'close_timestamp']]
 
         df['open_timestamp'] = pd.to_datetime(df['open_timestamp'], unit='ms') #приводим дату в читаемый вид
         df['close_timestamp'] = pd.to_datetime(df['close_timestamp'], unit='ms') #приводим дату в читаемый вид
@@ -191,13 +231,13 @@ class rep_from_test_res():
 
 	#заготовка под промежуточный развернутый отчет
         res_df = pd.DataFrame(columns=['pair','analyze_N', 'open_date', 'open_rate', 'close_rate', 'trade_duration',
-			 'profit_ratio', 'sell_reason', 'min_rate', 'max_rate',
+			 'profit_ratio', 'exit_reason', 'min_rate', 'max_rate',
 			 'sma', 'av_green', 'av_red', 'av_change_green', 'av_change_red', 'max_price%', 'min_price%', 'retio_of_max',
 			 'av_up_price', 'av_down_price', 'av_up_price_change', 'av_down_price_change', 'av_max_rate', 'av_min_rate',
 			 'volume', 'value_AV', 'value_MV', 'value_TV', 'TV/AV', 'TV/MV', 'win_TV/AV', 'SMA', 'Win_SMA'])
 
         pre_df = pd.DataFrame(columns=['pair', 'analyze_N', 'volume', 'value_AV', 'value_MV', 'value_TV', 'TV/AV', 'TV/MV', 'win_TV/AV',
-								   'open_date', 'open_rate', 'close_rate', 'trade_duration', 'profit_ratio', 'sell_reason', 'min_rate', 'max_rate'])
+								   'open_date', 'open_rate', 'close_rate', 'trade_duration', 'profit_ratio', 'exit_reason', 'min_rate', 'max_rate'])
 
 	# заготовка под финальный общий отчет
         report_df = pd.DataFrame(np.zeros([7,23]), columns=['value_N', 'sma', 'av_green', 'av_red', 'av_change_green', 'av_change_red', 'max_price%', 'min_price%', 'retio_of_max',
@@ -211,7 +251,7 @@ class rep_from_test_res():
 									  'win_last_24h_amplitude_up', 'win_last_24h_amplitude_down', 'win_last_24h_SMA', 'win_last_24h_SMAbuy'])
 
         rep_columns=['pair', 'open_date', 'open_rate', 'close_rate', 'trade_duration',
-				 'profit_ratio', 'sell_reason', 'min_rate', 'max_rate']
+				 'profit_ratio', 'exit_reason', 'min_rate', 'max_rate']
 
         pre_report_df = pd.DataFrame(np.zeros([3,9]), columns=['value_N', 'value_AV', 'value_MV', 'value_TV', 'TV/AV', 'TV/MV', 'win_TV/AV', 'SMA', 'Win_SMA'])
         pre_report_df['value_N']=['N-15', 'N-30', 'N-60']
@@ -235,10 +275,9 @@ class rep_from_test_res():
 
         for ii, i in enumerate(df_pairs): #проходим по всему списку уникальных имен пар
         	buf_df=df.loc[df['pair'] == i] # датафрейм с трейдами для текущего, уникального, названия пары
-	#    print(buf_df)
-        	#print(i)
-        	f_pair_name=work_path+'/data/binance'+'/'+i.replace('/', '_')
-
+        	f_pair_name = i.replace('/', '_')
+        	#print(buf_df)
+                #f_pair_name=work_path+'/data/binance'+'/'+i.replace('/', '_')
         	df_pair_1m = self.get_pair_fdata(f_pair_name, '1m')
         	df_pair_1h = self.get_pair_fdata(f_pair_name, '1h')
         	df_pair_1d = self.get_pair_fdata(f_pair_name, '1d')
