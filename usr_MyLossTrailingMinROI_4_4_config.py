@@ -1,4 +1,4 @@
-#  2022-06-09 / 21:04:37
+#  2022-06-09 / 22:12:46
  
 import numpy as np 
 class config_strategy(): 

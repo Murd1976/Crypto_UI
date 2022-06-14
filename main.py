@@ -12,6 +12,7 @@ import socket
 
 import design  # Это наш конвертированный файл дизайна
 from global_report_24 import rep_from_test_res  # файл с функциями построения отчета
+from test_json_to_txt import my_reports  # файл с функциями построения форматированного текстового отчета
 
 class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
 
@@ -179,6 +180,8 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
         return strategy_name
 
     def run_report(self):
+        my_txt_rep = my_reports()   #создаем объект нашего собственного класса my_reports()
+        
         my_rep = rep_from_test_res() #создаем объект нашего собственного класса rep_from_test_res()
         backtest_file_name = self.comboBackTest.currentText()
 
@@ -192,7 +195,13 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
         sftp.close()
         
         self.directory = './reports/'
-        self.listInfo.addItem("Creatin report, please wait... ")
+
+        self.listInfo.addItem("Creating report, please wait... ")
+        
+        res_report = my_txt_rep.json_to_txt(self.directory, backtest_file_name)
+        self.listInfo.addItem("Created report: ")
+        self.listInfo.addItem(backtest_file_name.split('.')[0]+'.txt')
+        
         res_report = my_rep.get_report(self.directory, backtest_file_name)
         
         os.remove("./reports/" + backtest_file_name)
@@ -337,7 +346,7 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
          # Выполнить команду linux
         #command = run_str #+ ' /' + self.directory
         #commands = [ 'cd /' + self.directory, run_str]  # набор команд: переход в рабочий каталог; команда(строка) для запуска бектеста с заданными параметрами
-        commands = ['ls', run_str]  # команда(строка) для запуска бектеста с заданными параметрами
+        commands = [run_str]  # команда(строка) для запуска бектеста с заданными параметрами
         
         with client.invoke_shell() as ssh:
             ssh.recv(max_bytes)
@@ -365,7 +374,7 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
             result = {}
             for command_ in commands:
                 ssh.send(f"{command_}\n")
-                ssh.settimeout(7)    #пауза после отправки команды, чтобы дать появиться сопутствующему тексту консоли
+                ssh.settimeout(170)    #пауза после отправки команды, чтобы дать появиться сопутствующему тексту консоли
 
                 output = ""
                 while True:
