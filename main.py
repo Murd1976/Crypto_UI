@@ -16,7 +16,12 @@ from test_json_to_txt import my_reports  # файл с функциями пос
 
 class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
 
-    directory = ''
+    server_directory = '/home/murd/buf/ft_userdata/'
+    server_strategy_directory = '/user_data/strategies/'
+    server_backtests_directory = '/user_data/backtest_results/'
+    server_user_directory = ''
+    client_directory = ''
+    reports_directory = './reports/'
 
     # Информация о сервере, имя хоста (IP-адрес), номер порта, имя пользователя и пароль
 
@@ -42,27 +47,33 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
         self.checkROI_3.stateChanged.connect(self.roi_anable)
         self.checkROI_4.stateChanged.connect(self.roi_anable)
         #self.listBtResults.currentItemChan.stateChanged.connect(ged.connect(self.print_info)
+
+        self.comboStrategies.activated.connect(self.param_of_cur_strategy)
+        self.comboStrategies.currentIndexChanged.connect(self.param_of_cur_strategy)
+
+#        self.lineEdit_Login.selectAll()
+#        self.lineEdit_Password.selectAll()
         
         
     def browse_folder(self):
         self.comboBackTest.clear()  # На случай, если в списке уже есть элементы
         self.comboStrategies.clear()
-        self.directory = QtWidgets.QFileDialog.getExistingDirectory(self, "Выберите папку", "C:/Users/Denis/ft_userdata")
+        self.client_directory = QtWidgets.QFileDialog.getExistingDirectory(self, "Выберите папку", "C:/Users/Denis/ft_userdata")
 #        self.directory = QtWidgets.QFileDialog.getExistingDirectoryUrl(self, "Выберите папку", "https://172.18.90.46/home/murd")
 
         self.listInfo.addItem(self.directory)
         # открыть диалог выбора директории и установить значение переменной
         # равной пути к выбранной директории
 
-        if self.directory:  # не продолжать выполнение, если пользователь не выбрал директорию
+        if self.client_directory:  # не продолжать выполнение, если пользователь не выбрал директорию
             
-            for file_name in os.listdir(self.directory+'/backtest_results'):  # для каждого файла в директории
+            for file_name in os.listdir(self.client_directory+'/backtest_results'):  # для каждого файла в директории
                 if file_name != '.last_result.json':
                     splited_str = file_name.split('.')
                     if len(splited_str) == 2:
                         if splited_str[1] == 'json': 
                             self.comboBackTest.addItem(file_name)   # добавить файл в listBtResults
-            for file_name in os.listdir(self.directory+'/strategies'):  # для каждого файла в директории
+            for file_name in os.listdir(self.client_directory+'/strategies'):  # для каждого файла в директории
                 splited_str = file_name.split('.')
                 if len(splited_str) == 2:
                     if splited_str[1] == 'py': 
@@ -74,23 +85,46 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
         self.comboBackTest.clear()
         self.comboStrategies.clear()
         
-        self.directory ='/home/murd/buf/ft_userdata'
+#        self.server_directory ='/home/murd/buf/ft_userdata'
         max_bytes=60000
+
+        self.username = self.lineEdit_Login.text()
+        self.password = self.lineEdit_Password.text()
         
          # Создать объект SSH
         self.listInfo.addItem("Runing SSH...")
-        self.listInfo.addItem(self.hostname)
-        self.listInfo.addItem(str(self.port))
+        self.listInfo.addItem("Host name: " + self.hostname)
+        self.listInfo.addItem("Port: " + str(self.port))
                 
         client = paramiko.SSHClient()
          # Автоматически добавлять стратегию, сохранять имя хоста сервера и ключевую информацию
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
          # подключиться к серверу
-        client.connect(self.hostname, self.port, self.username, self.password, compress=True)
-        self.listInfo.addItem("Connected to server!")
+        try:
+            client.connect(self.hostname, self.port, self.username, self.password, compress=True)
+                        
+        except Exception as e:
+            self.listInfo.addItem('Error connection to server: ' + str (e))
+            #self.listInfo.addItem("Invalid login/password!")
+            self.listInfo.addItem('________________________________________')
+            return
+            
+        else:
+            self.listInfo.addItem("Connected to server!")
+            self.listInfo.addItem('________________________________________')
+
+        sftp_client = client.open_sftp()
+        #Проверяем наличие, на сервере, полльзователького каталога, если такго не существует - создаем
+        try:
+            sftp_attributes = sftp_client.stat(self.server_directory + self.server_backtests_directory+self.server_user_directory)
+        except Exception as e:
+#            self.listInfo.addItem('Error connection to server: ' + str (e))
+            sftp_client.mkdir(self.server_directory + self.server_backtests_directory+self.server_user_directory)
+            self.listInfo.addItem("Created user directory: " + self.server_user_directory)
+#        print(sftp_attributes)
 
          # Выполнить команду linux
-        command = 'ls /' + self.directory + '/user_data/strategies'
+        command = 'ls /' + self.server_directory + self.server_strategy_directory
         
         stdin, stdout, stderr = client.exec_command(command)
 
@@ -106,7 +140,9 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
                   if splited_str2[0] in ['min']:
                      self.comboStrategies.addItem(file_name) # добавить файл в listStrategies
 
-        command = 'ls /' + self.directory + '/user_data/backtest_results'
+        self.param_of_cur_strategy() # выставляем значения параметров в соответствии с текущей стратегией
+
+        command = 'ls /' + self.server_directory + self.server_backtests_directory + self.server_user_directory
         
         stdin, stdout, stderr = client.exec_command(command)
         for file_name in stdout:  # для каждого файла в директории
@@ -117,7 +153,20 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
                   if splited_str[1] == 'json': 
                      self.comboBackTest.addItem(file_name)   # добавить файл в listBtResults
 
-#        commands = [ 'cd /' + self.directory + '/user_data/backtest_results', 'docker-compose ps', command]    
+        if self.comboStrategies.count() > 0:
+           self.btnRunBT.setEnabled(True)
+        else:
+           self.btnRunBT.setEnabled(False)
+           
+        if self.comboBackTest.count() > 0:
+           self.btnReport.setEnabled(True)
+        else:
+           self.btnReport.setEnabled(False) 
+            
+
+        sftp_client.close()
+
+#        commands = [ 'cd /' + self.server_directory + '/user_data/backtest_results', 'docker-compose ps', command]    
 #        with client.invoke_shell() as ssh:
             #ssh.send("enable\n")
             #ssh.send(f"{enable}\n")
@@ -152,13 +201,13 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
 
     def get_strategy(self, f_name: str):
 
-        self.directory ='/home/murd/buf/ft_userdata'
+#        self.server_directory ='/home/murd/buf/ft_userdata'
         
         client = paramiko.SSHClient()
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         client.connect(self.hostname, self.port, self.username, self.password, compress=True)
         sftp_client = client.open_sftp()
-        remote_file = sftp_client.open (self.directory+'/user_data/strategies/'+f_name) # Путь к файлу
+        remote_file = sftp_client.open (self.server_directory + self.server_strategy_directory + f_name) # Путь к файлу
         try:
             strategy_name = 'none'
             for line in remote_file:
@@ -168,7 +217,7 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
                     pars_str = pars_str1[1].split('(') #re.split(' |()', line)
                     strategy_name = pars_str[0]
                     #self.listInfo.addItem(line)
-                    self.listInfo.addItem("Strategi name: ")
+                    self.listInfo.addItem("Strategy name: ")
                     self.listInfo.addItem(strategy_name)
                     self.listInfo.addItem('________________________________________')
                     #for i in range(len(pars_str)):
@@ -185,26 +234,27 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
         my_rep = rep_from_test_res() #создаем объект нашего собственного класса rep_from_test_res()
         backtest_file_name = self.comboBackTest.currentText()
 
-        self.directory ='/home/murd/buf/ft_userdata'
+#        self.server_directory ='/home/murd/buf/ft_userdata'
         transport = paramiko.Transport((self.hostname, self.port))
         transport.connect(username = self.username, password = self.password)
-
+        
         sftp = paramiko.SFTPClient.from_transport(transport)
-        #загрузить файл результатов теста на комп пользователя
-        sftp.get(self.directory + "/user_data/backtest_results/" + backtest_file_name, "./reports/" + backtest_file_name)
+                        
+        #загрузить файл результатов теста на комп пользователя             
+        sftp.get(self.server_directory + self.server_backtests_directory +self.server_user_directory + backtest_file_name, self.reports_directory + backtest_file_name)
         sftp.close()
         
-        self.directory = './reports/'
+#        self.reports_directory = './reports/'
 
         self.listInfo.addItem("Creating report, please wait... ")
         
-        res_report = my_txt_rep.json_to_txt(self.directory, backtest_file_name)
+        res_report = my_txt_rep.json_to_txt(self.reports_directory, backtest_file_name)
         self.listInfo.addItem("Created report: ")
         self.listInfo.addItem(backtest_file_name.split('.')[0]+'.txt')
         
-        res_report = my_rep.get_report(self.directory, backtest_file_name)
+        res_report = my_rep.get_report(self.reports_directory, backtest_file_name)
         
-        os.remove("./reports/" + backtest_file_name)
+        os.remove(self.reports_directory + backtest_file_name)
 
         if res_report == "no_trades":
             self.listInfo.addItem("Created report error: No trades in test results!")
@@ -229,7 +279,7 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
     def run_backtest(self):
 
         buf_str = self.get_strategy(self.comboStrategies.currentText())
-        file_path = 'usr_' + buf_str + '_config.py'
+        file_config = 'usr_' + buf_str + '_config.py'
         max_bytes=160000
         short_pause=1
         long_pause=5
@@ -238,7 +288,7 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
             datadir = " --datadir user_data/data/binance "
             export = " --export trades "
             config = " --config user_data/config_" + self.get_config_part() + ".json "
-            export_filename = " --export-filename user_data/backtest_results/bc_" + self.lineEdit_N.text() +'_' + self.get_config_part()+ '_' + buf_str + '.json'
+            export_filename = " --export-filename user_data/backtest_results/" + self.server_user_directory + "bc_" + self.lineEdit_N.text() +'_' + self.get_config_part()+ '_' + buf_str + '.json'
 
             strategy = " -s "+ buf_str
             
@@ -304,7 +354,7 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
         strategy_settings = pd.concat([strategy_settings, pd.Series([buf_str])], ignore_index = True)
 
         
-        with open(file_path, 'w') as out_file:
+        with open(file_config, 'w') as out_file:
             out_file.write('#  '+datetime.now().strftime('%Y-%m-%d / %H:%M:%S')+'\n \n')
             out_file.write('import numpy as np \n')
             out_file.write('class config_strategy(): \n')
@@ -316,14 +366,14 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
         out_file.close()
 
 
-        self.directory ='home/murd/buf/ft_userdata'
+#        self.directory ='home/murd/buf/ft_userdata'
         transport = paramiko.Transport((self.hostname, self.port))
         transport.connect(username = self.username, password = self.password)
 
         sftp = paramiko.SFTPClient.from_transport(transport)
 
         #загрузить файл конфигурации тестируемой стратегии на сервер
-        sftp.put("./" + file_path, '/' + self.directory + "/user_data/strategies/" + file_path)
+        sftp.put("./" + file_config, '/' + self.server_directory + self.server_strategy_directory + file_config)
         
         sftp.close()
 
@@ -331,7 +381,7 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
         for buf_str in strategy_settings:
             self.listInfo.addItem(buf_str)
 
-        self.listInfo.addItem('Saved in config file: ' + file_path)   
+        self.listInfo.addItem('Saved in config file: ' + file_config)   
         self.listInfo.addItem('________________________________________')
 
         # Создать объект SSH
@@ -360,7 +410,7 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
 #            ssh.send(f"{command}\n")
 #            ttime.sleep(short_pause)
 
-            command = "cd /" + self.directory
+            command = "cd /" + self.server_directory
             ssh.send(f"{command}\n")
             ttime.sleep(short_pause)
 
@@ -412,27 +462,55 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
             self.gBox_ROI_4.setEnabled(True)
         else: self.gBox_ROI_4.setEnabled(False)
 
+    def param_of_cur_strategy(self):
+        if self.comboBackTest.count() > 0 :
+           buf_str = self.get_strategy(self.comboStrategies.currentText())
+           buf_str = buf_str + '_config.py'
+            
+           if os.path.exists(buf_str):
+               with open(buf_str, 'r') as f:
+
+                   for line in f:
+                       line = line.strip()
+                       if ('arg_N' in line):
+                           pars_str = line.split('=')
+                           self.lineEdit_N.setText(pars_str[1].strip())
+               f.close()        
+
     def load_ssh_my_config(self):
 
-        f = open('ssh_my_config.conf')
-        host_name = 'none'
-        port = "22"
-        for line in f:
-            line = line.strip()
-            if ('hostname' in line):
-                    pars_str = line.split('=')
-                    host_name = pars_str[1].strip()
-                    self.hostname = host_name
-                    self.listInfo.addItem("Host name: " + host_name)
+        if not os.path.exists("./reports/"):
+            os.mkdir("reports")
+            self.listInfo.addItem("Created directory: /reports")
+#        else:
+#            self.listInfo.addItem("Alredy exist.")
+        buf_str = 'ssh_my_config.conf'
+        if os.path.exists(buf_str):
+            f = open(buf_str)
+            host_name = 'none'
+            port = "22"
+            for line in f:
+                line = line.strip()
+                if ('hostname' in line):
+                        pars_str = line.split('=')
+                        host_name = pars_str[1].strip()
+                        self.hostname = host_name
+                        self.listInfo.addItem("Host name: " + host_name)
                     
 
-            if ('port' in line):
-                    pars_str = line.split('=')
-                    port = pars_str[1]
-                    self.port = int(port)
-                    self.listInfo.addItem("Port: " + port)
+                if ('port' in line):
+                        pars_str = line.split('=')
+                        port = pars_str[1]
+                        self.port = int(port)
+                        self.listInfo.addItem("Port: " + port)
+
+                if ('user_dir' in line):
+                        pars_str = line.split('=')
+                        self.server_user_directory = pars_str[1].strip() + '/'
+                        self.listInfo.addItem('User directory: ' + self.server_user_directory)
                                         
-                    self.listInfo.addItem('________________________________________')
+            self.listInfo.addItem('________________________________________')
+            f.close()
 
     def exit_prog(self):
         exit()
