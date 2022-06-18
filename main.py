@@ -2,10 +2,12 @@ import sys  # sys нужен для передачи argv в QApplication
 import os
 import re
 import pandas as pd
+import numpy as np
 from datetime import datetime, date, time
 import time as ttime
 
 from PyQt5 import QtWidgets
+from PyQt5.QtCore import QTimer
 import  subprocess
 import paramiko
 import socket
@@ -49,7 +51,11 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
         #self.listBtResults.currentItemChan.stateChanged.connect(ged.connect(self.print_info)
 
         self.comboStrategies.activated.connect(self.param_of_cur_strategy)
-        self.comboStrategies.currentIndexChanged.connect(self.param_of_cur_strategy)
+        #self.comboStrategies.currentIndexChanged.connect(self.param_of_cur_strategy)
+
+        self.step = 0                                           # 3
+        self.timer = QTimer(self)                               # 4
+        self.timer.timeout.connect(self.update_pb_test)
 
 #        self.lineEdit_Login.selectAll()
 #        self.lineEdit_Password.selectAll()
@@ -396,8 +402,7 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
          # Выполнить команду linux
         #command = run_str #+ ' /' + self.directory
         #commands = [ 'cd /' + self.directory, run_str]  # набор команд: переход в рабочий каталог; команда(строка) для запуска бектеста с заданными параметрами
-        commands = [run_str]  # команда(строка) для запуска бектеста с заданными параметрами
-        
+                
         with client.invoke_shell() as ssh:
             ssh.recv(max_bytes)
             self.listInfo.addItem('________________________________________')
@@ -420,26 +425,43 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
 
             part = ssh.recv(max_bytes).decode("utf-8")
             self.listInfo.addItem(part) 
-            
+
+            commands = [run_str]  # команда(строка) для запуска бектеста с заданными параметрами
             result = {}
+            wating_test_result = 170
+            pb_step = wating_test_result/100
+            self.timer.start(round(pb_step*1000))
             for command_ in commands:
                 ssh.send(f"{command_}\n")
-                ssh.settimeout(170)    #пауза после отправки команды, чтобы дать появиться сопутствующему тексту консоли
+                ssh.settimeout(1)    #пауза после отправки команды, чтобы дать появиться сопутствующему тексту консоли
 
+#                self.step += 1
+#                self.pb_test.setValue(self.step)
+                        
                 output = ""
-                while True:
+#                while True:
+                while  (self.step < 100) and (not("Closing async ccxt session" in part)):
+                    QtWidgets.QApplication.processEvents()
                     try:
                         part = ssh.recv(max_bytes).decode("utf-8")
                         #output += part
                         self.listInfo.addItem(part)
                         ttime.sleep(0.5)
+                        
                     except socket.timeout:
-                        break
+                        continue
+#                        break
                 #result[command] = output
                 #self.listInfo.addItem(output)
             self.listInfo.addItem('________________________________________')
+            self.reset_pb_test()
                 
-
+#    def run_ssh_command(self, ssh, pause)
+#        ssh.send(f"{command}\n")
+#        ttime.sleep(pause)
+#        part = ssh.recv(max_bytes).decode("utf-8")
+#        return part
+    
     def normalyze_percents(self, num: str):
        buf = float(num)/100
        str_num = str(buf)
@@ -448,18 +470,22 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
     def roi_anable(self):
         if self.checkROI_1.checkState():
             self.gBox_ROI_1.setEnabled(True)
+            self.lineEdit_ROI_4_1.setEnabled(False)
         else: self.gBox_ROI_1.setEnabled(False)
 
         if self.checkROI_2.checkState():
             self.gBox_ROI_2.setEnabled(True)
+            self.lineEdit_ROI_3_1.setEnabled(False)
         else: self.gBox_ROI_2.setEnabled(False)
 
         if self.checkROI_3.checkState():
             self.gBox_ROI_3.setEnabled(True)
+            self.lineEdit_ROI_2_1.setEnabled(False)
         else: self.gBox_ROI_3.setEnabled(False)
 
         if self.checkROI_4.checkState():
             self.gBox_ROI_4.setEnabled(True)
+            self.lineEdit_ROI_1_1.setEnabled(False)
         else: self.gBox_ROI_4.setEnabled(False)
 
     def param_of_cur_strategy(self):
@@ -475,6 +501,84 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
                        if ('arg_N' in line):
                            pars_str = line.split('=')
                            self.lineEdit_N.setText(pars_str[1].strip())
+                           
+                       if ('arg_R' in line):
+                           pars_str = line.split('=')
+                           self.lineEdit_R.setText(pars_str[1].strip())
+
+                       if ('arg_P' in line):
+                           pars_str = line.split('=')
+                           self.lineEdit_P.setText(pars_str[1].strip())
+
+                       if ('arg_MR' in line):
+                           pars_str = line.split('=')
+                           buf_str = str(float(pars_str[1].strip())*100)
+                           self.lineEdit_MR.setText(buf_str)
+
+                       if ('stoploss' in line):
+                           pars_str = line.split('=')
+                           if pars_str[0].strip() == 'stoploss' :
+                               buf_str = str(round(abs(float(pars_str[1].strip())*100), 3))
+                               self.lineEdit_SL.setText(buf_str)
+
+                       if ('arg_stoploss' in line):
+                           pars_str = line.split('=')
+                           buf_str = str(round(float(pars_str[1].strip())*100, 3))
+                           self.lineEdit_S.setText(buf_str)
+
+                       if ('my_stoploss' in line):
+                           pars_str = line.split('=')
+                           pars_str = pars_str[1].split('[')
+                           pars_str = pars_str[1].split(']')
+                           pars_str = pars_str[0].split(',')
+                           self.lineEdit_MySL_1.setText(pars_str[0].strip())
+                           buf_str = str(round(abs(float(pars_str[1].strip())*100), 3))
+                           self.lineEdit_MySL_2.setText(buf_str)
+
+                       if ('minimal_roi' in line):
+                           roi = []
+                           pars_str = line.split('=')
+                           buf_str = pars_str[1].strip().strip('{}')
+                           pars_str = buf_str.strip().split(',')
+                           
+                           for i in range(len(pars_str)):
+                               pars_str1 = pars_str[len(pars_str)-1 - i].strip().split(':')
+                               print(pars_str1)
+                               roi_val = str(round(abs(float(pars_str1[1].strip())*100), 3))
+                               roi_time = pars_str1[0].strip('""')
+                               print(roi_time)
+                               if roi_time == '0':
+                                   #self.lineEdit_ROI_1_1.setText(roi_time)
+                                   self.lineEdit_ROI_1_2.setText(roi_val)
+                                   #self.gBox_ROI_4.setEnabled(True)
+                                   self.checkROI_4.setChecked(True)
+                               if roi_time == '24':
+                                   #self.lineEdit_ROI_2_1.setText(roi_time)
+                                   self.lineEdit_ROI_2_2.setText(roi_val)
+                                   #self.gBox_ROI_3.setEnabled(True)
+                                   self.checkROI_3.setChecked(True)
+                               if roi_time == '30':
+                                   #self.lineEdit_ROI_3_1.setText(roi_time)
+                                   self.lineEdit_ROI_3_2.setText(roi_val)
+                                   #self.gBox_ROI_2.setEnabled(True)
+                                   self.checkROI_2.setChecked(True)
+                               if roi_time == '60':
+                                   #self.lineEdit_ROI_4_1.setText(roi_time)
+                                   self.lineEdit_ROI_4_2.setText(roi_val)
+                                   #self.gBox_ROI_1.setEnabled(True)
+                                   self.checkROI_1.setChecked(True)
+                           
+                           #roi = pars_str[0].strip('}')
+                           
+                           #print(roi[0])
+#                           pars_str = pars_str[1].split('[')
+#                           pars_str = pars_str[1].split(']')
+#                           pars_str = pars_str[0].split(',')
+#                           self.lineEdit_ROI_1_1.setText(pars_str[0].strip())
+#                           buf_str = str(abs(float(pars_str[1].strip()))*100)
+#                           self.lineEdit_ROI_1_2.setText(buf_str)
+                           
+                        
                f.close()        
 
     def load_ssh_my_config(self):
@@ -514,6 +618,16 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
 
     def exit_prog(self):
         exit()
+
+    def update_pb_test(self):
+        self.step += 1
+        
+        self.pb_test.setValue(self.step)
+        
+    def reset_pb_test(self):
+        self.pb_test.reset()
+        self.timer.stop()
+        self.step = 0
 
 def main():
     app = QtWidgets.QApplication(sys.argv)  # Новый экземпляр QApplication

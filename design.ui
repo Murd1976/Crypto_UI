@@ -29,16 +29,16 @@
    </size>
   </property>
   <property name="windowTitle">
-   <string>Trading Test</string>
+   <string>Trading BackTest-v1.0</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <widget class="QListWidget" name="listInfo">
     <property name="geometry">
      <rect>
       <x>10</x>
-      <y>600</y>
+      <y>610</y>
       <width>881</width>
-      <height>241</height>
+      <height>240</height>
      </rect>
     </property>
     <property name="sizePolicy">
@@ -51,7 +51,22 @@
      <enum>Qt::ScrollBarAsNeeded</enum>
     </property>
     <property name="sizeAdjustPolicy">
-     <enum>QAbstractScrollArea::AdjustIgnored</enum>
+     <enum>QAbstractScrollArea::AdjustToContents</enum>
+    </property>
+    <property name="editTriggers">
+     <set>QAbstractItemView::NoEditTriggers</set>
+    </property>
+    <property name="dragDropMode">
+     <enum>QAbstractItemView::NoDragDrop</enum>
+    </property>
+    <property name="defaultDropAction">
+     <enum>Qt::IgnoreAction</enum>
+    </property>
+    <property name="selectionBehavior">
+     <enum>QAbstractItemView::SelectRows</enum>
+    </property>
+    <property name="textElideMode">
+     <enum>Qt::ElideRight</enum>
     </property>
     <property name="verticalScrollMode">
      <enum>QAbstractItemView::ScrollPerPixel</enum>
@@ -250,7 +265,7 @@
       <x>10</x>
       <y>250</y>
       <width>881</width>
-      <height>330</height>
+      <height>321</height>
      </rect>
     </property>
     <property name="sizePolicy">
@@ -647,6 +662,9 @@
        <string/>
       </property>
       <widget class="QLineEdit" name="lineEdit_ROI_1_1">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
        <property name="geometry">
         <rect>
          <x>10</x>
@@ -1244,6 +1262,28 @@
       </widget>
      </item>
     </layout>
+   </widget>
+   <widget class="QProgressBar" name="pb_test">
+    <property name="enabled">
+     <bool>true</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>580</y>
+      <width>881</width>
+      <height>23</height>
+     </rect>
+    </property>
+    <property name="maximum">
+     <number>100</number>
+    </property>
+    <property name="value">
+     <number>0</number>
+    </property>
+    <property name="textVisible">
+     <bool>true</bool>
+    </property>
    </widget>
   </widget>
  </widget>
