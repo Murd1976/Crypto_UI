@@ -9,6 +9,7 @@ import time as ttime
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import QTimer
 import  subprocess
+import logging
 import paramiko
 import socket
 
@@ -18,7 +19,8 @@ from test_json_to_txt import my_reports  # файл с функциями пос
 
 class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
 
-    server_directory = '/home/murd/buf/ft_userdata/'
+#    server_directory = '/home/murd/buf/ft_userdata/'
+    server_directory = '/root/application'
     server_strategy_directory = '/user_data/strategies/'
     server_backtests_directory = '/user_data/backtest_results/'
     server_user_directory = ''
@@ -27,10 +29,14 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
 
     # Информация о сервере, имя хоста (IP-адрес), номер порта, имя пользователя и пароль
 
-    hostname = "172.18.90.46"
-    port = 2222
-    username = "murd"
-    password = "Ambaloid!"
+#    hostname = "172.18.90.46"
+#    port = 2222
+#    username = "murd"
+#    password = "Ambaloid!"
+
+    hostname = "gate.controller.cloudlets.zone"
+    port = 3022
+    username = "7441-732"
     
     def __init__(self):
         # Это здесь нужно для доступа к переменным, методам
@@ -85,41 +91,91 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
                     if splited_str[1] == 'py': 
                         self.comboStrategies.addItem(file_name) # добавить файл в listStrategies
 
-    def connect_ssh(self):
+    def get_ssh_connect(self):
 
-        # На случай, если в списке уже есть элементы
-        self.comboBackTest.clear()
-        self.comboStrategies.clear()
-        
-#        self.server_directory ='/home/murd/buf/ft_userdata'
-        max_bytes=60000
+        logger = paramiko.util.logging.getLogger()
+        hdlr = logging.FileHandler('app.log')
+        formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+        hdlr.setFormatter(formatter)
+        logger.addHandler(hdlr) 
+        logger.setLevel(logging.INFO)
 
-        self.username = self.lineEdit_Login.text()
-        self.password = self.lineEdit_Password.text()
-        
          # Создать объект SSH
         self.listInfo.addItem("Runing SSH...")
         self.listInfo.addItem("Host name: " + self.hostname)
         self.listInfo.addItem("Port: " + str(self.port))
-                
-        client = paramiko.SSHClient()
+        try:        
+            client = paramiko.SSHClient()
          # Автоматически добавлять стратегию, сохранять имя хоста сервера и ключевую информацию
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            private_key = paramiko.RSAKey.from_private_key_file('RSA_private_1.txt')
          # подключиться к серверу
-        try:
-            client.connect(self.hostname, self.port, self.username, self.password, compress=True)
+        
+#            client.connect(self.hostname, self.port, self.username, self.password, compress=True)
+            client.connect(self.hostname, self.port, self.username, pkey=private_key, timeout=3, disabled_algorithms=dict(pubkeys=['rsa-sha2-256', 'rsa-sha2-512']))
                         
         except Exception as e:
+            logging.debug(e)
             self.listInfo.addItem('Error connection to server: ' + str (e))
             #self.listInfo.addItem("Invalid login/password!")
             self.listInfo.addItem('________________________________________')
-            return
+            return 'error'
             
         else:
             self.listInfo.addItem("Connected to server!")
             self.listInfo.addItem('________________________________________')
 
-        sftp_client = client.open_sftp()
+        return client
+
+    def get_sftp_connect(self):
+
+        logger = paramiko.util.logging.getLogger()
+        hdlr = logging.FileHandler('app.log')
+        formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+        hdlr.setFormatter(formatter)
+        logger.addHandler(hdlr) 
+        logger.setLevel(logging.INFO)
+
+        try:
+#        self.server_directory ='/home/murd/buf/ft_userdata'
+            private_key = paramiko.RSAKey.from_private_key_file('RSA_private_1.txt')
+            transport = paramiko.Transport((self.hostname, self.port))
+            transport.connect(username = self.username, pkey = private_key)
+        
+            sftp = paramiko.SFTPClient.from_transport(transport)    
+            
+        except Exception as e:
+            logging.debug(e)
+            self.listInfo.addItem('Error connection to server (sftp): ' + str (e))
+            #self.listInfo.addItem("Invalid login/password!")
+            self.listInfo.addItem('________________________________________')
+            return 'error'
+            
+        else:
+            self.listInfo.addItem("Connected to server (sftp)!")
+            self.listInfo.addItem('________________________________________')
+
+        return sftp
+
+    def connect_ssh(self):
+        
+        # На случай, если в списке уже есть элементы
+        self.comboBackTest.clear()
+        self.comboStrategies.clear()
+        
+        max_bytes=60000
+
+#        self.username = self.lineEdit_Login.text()
+#        self.password = self.lineEdit_Password.text()
+       
+        
+        client = self.get_ssh_connect() #создаем ssh-подключение
+        if client != 'error':
+            sftp_client = client.open_sftp()
+            current_dir = sftp_client.getcwd()
+        else:
+            return
+        
         #Проверяем наличие, на сервере, полльзователького каталога, если такго не существует - создаем
         try:
             sftp_attributes = sftp_client.stat(self.server_directory + self.server_backtests_directory+self.server_user_directory)
@@ -171,6 +227,7 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
             
 
         sftp_client.close()
+        client.close()
 
 #        commands = [ 'cd /' + self.server_directory + '/user_data/backtest_results', 'docker-compose ps', command]    
 #        with client.invoke_shell() as ssh:
@@ -209,9 +266,10 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
 
 #        self.server_directory ='/home/murd/buf/ft_userdata'
         
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        client.connect(self.hostname, self.port, self.username, self.password, compress=True)
+#        client = paramiko.SSHClient()
+#        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+#        client.connect(self.hostname, self.port, self.username, self.password, compress=True)
+        client = self.get_ssh_connect() #создаем ssh-подключение
         sftp_client = client.open_sftp()
         remote_file = sftp_client.open (self.server_directory + self.server_strategy_directory + f_name) # Путь к файлу
         try:
@@ -231,6 +289,8 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
                         #self.listInfo.addItem(str(pars_str[i]))
         finally:
             remote_file.close()
+
+        client.close()
         
         return strategy_name
 
@@ -240,15 +300,14 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
         my_rep = rep_from_test_res() #создаем объект нашего собственного класса rep_from_test_res()
         backtest_file_name = self.comboBackTest.currentText()
 
-#        self.server_directory ='/home/murd/buf/ft_userdata'
-        transport = paramiko.Transport((self.hostname, self.port))
-        transport.connect(username = self.username, password = self.password)
-        
-        sftp = paramiko.SFTPClient.from_transport(transport)
-                        
-        #загрузить файл результатов теста на комп пользователя             
-        sftp.get(self.server_directory + self.server_backtests_directory +self.server_user_directory + backtest_file_name, self.reports_directory + backtest_file_name)
-        sftp.close()
+        client = self.get_ssh_connect() #создаем ssh-подключение
+        if client != 'error':
+            sftp = client.open_sftp()
+            
+            sftp.get(self.server_directory + self.server_backtests_directory +self.server_user_directory + backtest_file_name, self.reports_directory + backtest_file_name)
+            sftp.close()
+        else:
+            return
         
 #        self.reports_directory = './reports/'
 
@@ -269,6 +328,7 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
             self.listInfo.addItem(backtest_file_name.split('.')[0]+'_t1.xlsx')
         self.listInfo.addItem('________________________________________')
         rep_done =True
+        sftp.close()
         return rep_done
 
     def get_config_part(self):
@@ -299,7 +359,7 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
             strategy = " -s "+ buf_str
             
             #run_str = "docker-compose run --rm freqtrade backtesting " + datadir+export+ config+ export_filename+strategy
-            run_str = "freqtrade backtesting " + datadir+export+ config+ export_filename+strategy
+            run_str = "docker-compose run --rm freqtrade backtesting " + datadir+export+ config+ export_filename+strategy
             
             self.listInfo.addItem('Command line for run test:')
             self.listInfo.addItem(run_str)
@@ -371,17 +431,20 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
 
         out_file.close()
 
+#        transport = paramiko.Transport((self.hostname, self.port))
+#        transport.connect(username = self.username, password = self.password)
 
-#        self.directory ='home/murd/buf/ft_userdata'
-        transport = paramiko.Transport((self.hostname, self.port))
-        transport.connect(username = self.username, password = self.password)
+#        sftp = paramiko.SFTPClient.from_transport(transport)
+        client = self.get_ssh_connect() #создаем ssh-подключение
+        if client != 'error':
+            sftp = client.open_sftp()
 
-        sftp = paramiko.SFTPClient.from_transport(transport)
+            #загрузить файл конфигурации тестируемой стратегии на сервер
+            sftp.put("./" + file_config, '/' + self.server_directory + self.server_strategy_directory + file_config)
+            sftp.close()
 
-        #загрузить файл конфигурации тестируемой стратегии на сервер
-        sftp.put("./" + file_config, '/' + self.server_directory + self.server_strategy_directory + file_config)
-        
-        sftp.close()
+        else:
+            return
 
         self.listInfo.addItem('Settings for current test:')
         for buf_str in strategy_settings:
@@ -391,14 +454,15 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
         self.listInfo.addItem('________________________________________')
 
         # Создать объект SSH
-        self.listInfo.addItem("Runing SSH...") 
-        client = paramiko.SSHClient()
+#        self.listInfo.addItem("Runing SSH...") 
+#        client = paramiko.SSHClient()
          # Автоматически добавлять стратегию, сохранять имя хоста сервера и ключевую информацию
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+#        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
          # подключиться к серверу
-        client.connect(self.hostname, self.port, self.username, self.password, compress=True)
-        self.listInfo.addItem("Connected to server!")
+#        client.connect(self.hostname, self.port, self.username, self.password, compress=True)
+#        self.listInfo.addItem("Connected to server!")
 
+        client = self.get_ssh_connect()
          # Выполнить команду linux
         #command = run_str #+ ' /' + self.directory
         #commands = [ 'cd /' + self.directory, run_str]  # набор команд: переход в рабочий каталог; команда(строка) для запуска бектеста с заданными параметрами
@@ -428,7 +492,7 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
 
             commands = [run_str]  # команда(строка) для запуска бектеста с заданными параметрами
             result = {}
-            wating_test_result = 170
+            wating_test_result = 300
             pb_step = wating_test_result/100
             self.timer.start(round(pb_step*1000))
             for command_ in commands:
@@ -455,6 +519,8 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
                 #self.listInfo.addItem(output)
             self.listInfo.addItem('________________________________________')
             self.reset_pb_test()
+
+            client.close()
                 
 #    def run_ssh_command(self, ssh, pause)
 #        ssh.send(f"{command}\n")
@@ -543,10 +609,10 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
                            
                            for i in range(len(pars_str)):
                                pars_str1 = pars_str[len(pars_str)-1 - i].strip().split(':')
-                               print(pars_str1)
+                               #print(pars_str1)
                                roi_val = str(round(abs(float(pars_str1[1].strip())*100), 3))
                                roi_time = pars_str1[0].strip('""')
-                               print(roi_time)
+                               #print(roi_time)
                                if roi_time == '0':
                                    #self.lineEdit_ROI_1_1.setText(roi_time)
                                    self.lineEdit_ROI_1_2.setText(roi_val)
@@ -591,28 +657,30 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
         buf_str = 'ssh_my_config.conf'
         if os.path.exists(buf_str):
             f = open(buf_str)
-            host_name = 'none'
-            port = "22"
+            host_name = 'gate.controller.cloudlets.zone'
+            port = "3022"
             for line in f:
                 line = line.strip()
-                if ('hostname' in line):
-                        pars_str = line.split('=')
-                        host_name = pars_str[1].strip()
-                        self.hostname = host_name
-                        self.listInfo.addItem("Host name: " + host_name)
+#                if ('hostname' in line):
+#                        pars_str = line.split('=')
+#                        host_name = pars_str[1].strip()
+#                        self.hostname = host_name
+#                        self.listInfo.addItem("Host name: " + host_name)
                     
 
-                if ('port' in line):
-                        pars_str = line.split('=')
-                        port = pars_str[1]
-                        self.port = int(port)
-                        self.listInfo.addItem("Port: " + port)
+#                if ('port' in line):
+#                        pars_str = line.split('=')
+#                        port = pars_str[1]
+#                        self.port = int(port)
+#                        self.listInfo.addItem("Port: " + port)
 
                 if ('user_dir' in line):
                         pars_str = line.split('=')
                         self.server_user_directory = pars_str[1].strip() + '/'
                         self.listInfo.addItem('User directory: ' + self.server_user_directory)
-                                        
+
+            self.listInfo.addItem("Host name: " + host_name)
+            self.listInfo.addItem("Port: " + port)
             self.listInfo.addItem('________________________________________')
             f.close()
 

@@ -10,7 +10,7 @@ class my_reports():
         with open(directory + f_name, 'r') as f:
              #json_obj = json.loads(f.read())
             json_obj = json.loads(f.read())
-        print(f_name)
+#        print(f_name)
         cur_strategy = list(dict.keys(json_obj['strategy']))[0] # вытаскиваем имя стратегии из файла результатоы бектеста
         key_list = list(dict.keys(json_obj['strategy'][cur_strategy]))         
         #f.write(key_list)
