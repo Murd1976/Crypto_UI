@@ -91,7 +91,7 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
                     if splited_str[1] == 'py': 
                         self.comboStrategies.addItem(file_name) # добавить файл в listStrategies
 
-    def get_ssh_connect(self):
+    def get_ssh_connect(self, show_info = True):
 
         logger = paramiko.util.logging.getLogger()
         hdlr = logging.FileHandler('app.log')
@@ -101,9 +101,10 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
         logger.setLevel(logging.INFO)
 
          # Создать объект SSH
-        self.listInfo.addItem("Runing SSH...")
-        self.listInfo.addItem("Host name: " + self.hostname)
-        self.listInfo.addItem("Port: " + str(self.port))
+        if show_info: 
+            self.listInfo.addItem("Runing SSH...")
+            self.listInfo.addItem("Host name: " + self.hostname)
+            self.listInfo.addItem("Port: " + str(self.port))
         try:        
             client = paramiko.SSHClient()
          # Автоматически добавлять стратегию, сохранять имя хоста сервера и ключевую информацию
@@ -122,8 +123,9 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
             return 'error'
             
         else:
-            self.listInfo.addItem("Connected to server!")
-            self.listInfo.addItem('________________________________________')
+            if show_info:
+                self.listInfo.addItem("Connected to server!")
+                self.listInfo.addItem('________________________________________')
 
         return client
 
@@ -269,7 +271,7 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
 #        client = paramiko.SSHClient()
 #        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 #        client.connect(self.hostname, self.port, self.username, self.password, compress=True)
-        client = self.get_ssh_connect() #создаем ssh-подключение
+        client = self.get_ssh_connect(show_info = False) #создаем ssh-подключение
         sftp_client = client.open_sftp()
         remote_file = sftp_client.open (self.server_directory + self.server_strategy_directory + f_name) # Путь к файлу
         try:
@@ -555,7 +557,8 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
         else: self.gBox_ROI_4.setEnabled(False)
 
     def param_of_cur_strategy(self):
-        if self.comboBackTest.count() > 0 :
+        
+        if self.comboStrategies.count() > 0 :
            buf_str = self.get_strategy(self.comboStrategies.currentText())
            buf_str = buf_str + '_config.py'
             

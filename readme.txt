@@ -27,6 +27,8 @@ A summary text table with the test results can be seen in the information field 
 of the backtest. 
 Or in a text file after starting the report creation.
 The progress is displayed in the progress bar and may take several minutes.
+To see the .json files of the results of the latest tests, you need to refresh the list by 
+clicking the "Connect" button
 
 4. The ssh_my_config.conf file contains the server address, connection port 
 and user directory where test results will be saved in .json format.

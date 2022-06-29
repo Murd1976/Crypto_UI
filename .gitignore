@@ -1,0 +1,8 @@
+# ignoring list 
+RSA_private_1.txt
+*.log
+reports/
+
+__pycache__/
+*.exe
+usr*.py
