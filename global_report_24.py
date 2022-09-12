@@ -139,45 +139,38 @@ class rep_from_test_res():
         return round(max_p, 3), round(min_p, 3)
 
     #чтение свечей из заданного файла, с заданным time_rate
-    def get_pair_fdata(self, f_name, time_rate, hostname:str = "172.18.90.46", port:int = 2222, username:str = "murd", password:str = "Ambaloid!"):
+    def get_pair_fdata(self, f_name, time_rate):
 
         col_names=["date", "open", "high", "low", "close", "volume"]
         f_name=f_name+'-'+time_rate+'.json'
 
-        f = open('ssh_my_config.conf')
-        host_name = 'none'
-        port_ = "22"
-        for line in f:
-            line = line.strip()
-            if ('hostname' in line):
-                    pars_str = line.split('=')
-                    host_name = pars_str[1].strip()
-                    hostname = host_name
-                    #self.listInfo.addItem("Host name: " + host_name)
-                    
+        hostname = "gate.controller.cloudlets.zone"
+        port = 3022
+        username = "7441-732"
+        directory = '/root/application/user_data/data/binance/'
+        
+        try:        
+            client = paramiko.SSHClient()
+         # Автоматически добавлять стратегию, сохранять имя хоста сервера и ключевую информацию
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            private_key = paramiko.RSAKey.from_private_key_file('RSA_private_1.txt')
+         # подключиться к серверу
+            client.connect(hostname, port, username, pkey=private_key, timeout=3, disabled_algorithms=dict(pubkeys=['rsa-sha2-256', 'rsa-sha2-512']))
+        except:
+            print('Error connection')
+            return('error')
+        
+        
 
-            if ('port' in line):
-                    pars_str = line.split('=')
-                    port_ = pars_str[1]
-                    port = int(port_)
-                    #self.listInfo.addItem("Port: " + port)
-                                        
-                    #self.listInfo.addItem('________________________________________')
-
-
-
-
-        directory ='/home/murd/buf/ft_userdata/user_data/data/binance/'
-        transport = paramiko.Transport((hostname, port))
-        transport.connect(username = username, password = password)
-
-        sftp = paramiko.SFTPClient.from_transport(transport)
+        sftp_client = client.open_sftp()
         #загрузить файл свечей на комп пользователя
-        sftp.get(directory + f_name, "./reports/" + f_name)
-        sftp.close()
+        sftp_client.get(directory + f_name, "./reports/" + f_name)
+        sftp_client.close()
 
+        
+        
         if not os_lib.path.exists("./reports/" +f_name): #проверяем наличие такого файла
-            print('File ot found: ', "./reports/" +f_name)
+            print('File not found: ', "./reports/" +f_name)
             return null
     
         f_out_df= pd.read_json("./reports/" +f_name) #читаем данные из файла с time_rate свечами, для конкретной пары
@@ -411,7 +404,14 @@ class rep_from_test_res():
 	#Average 24 hours Volume in USDT (in the last 7 or 10 days) - simply from 24h candles data
         		res_df_24['av_24h_volume'][idnex_count] = df_pair_1d['volume'].tail(10).mean()
 	#Last 24 hours Volume in USDT - simply from 24h candles data
+        		print(i)
+        		print(b)
+        		print()
+        		print(df_pair_1d)
+        		print()
+        		        		
         		df_temp = df_pair_1d['volume'].loc[df_pair_1d['date'] <= b]
+        		print(df_temp)
         		res_df_24['last_24h_volume'][idnex_count] = df_temp.iloc[-2]
 	#Average 24 hours Amplitude (in the last 7 or 10 days) - simply from 24h candles data
         		df_temp = df_pair_1d['high']/df_pair_1d['open']*100-100

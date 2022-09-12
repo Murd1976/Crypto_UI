@@ -43,8 +43,7 @@ class ExampleApp(QtWidgets.QMainWindow, design.Ui_MainWindow):
         # и т.д. в файле design.py
         super().__init__()
         self.setupUi(self)  # Это нужно для инициализации нашего дизайна
-        
-        self.btnBrose.clicked.connect(self.browse_folder)
+                
         self.btnExit.clicked.connect(self.exit_prog)
         self.btnRunBT.clicked.connect(self.run_backtest)
         self.btnReport.clicked.connect(self.run_report)
